@@ -1,0 +1,63 @@
+- hosts: -----------------
+  gather_facts: no
+  vars_files:
+    - ----------------- put vault variable file path
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: routeros
+    ansible_user: admin
+    ftp_server: -----------------
+    ftp_user: -----------------
+    ftp_password: -----------------
+    ftp_directory: "-----------------"
+    # Initialize variable to check FTP upload success
+    ftp_upload_successful: true
+
+  tasks:
+    - name: Set Fact for Current Time
+      set_fact:
+        time: "{{ lookup('pipe', 'date \"+%Y-%m-%d-%H-%M\"') }}"
+
+    - name: Starting ROS System Backup
+      community.routeros.command:
+        commands: /system backup save name="{{ inventory_hostname }}"
+      register: system_backup_result
+
+    - name: Starting ROS Configuration Backup
+      community.routeros.command:
+        commands: /export compact file="{{ inventory_hostname }}"
+      register: config_backup_result
+
+    - name: Wait for Backup to be Ready
+      ansible.builtin.pause:
+        seconds: 10  # Wait 
+
+    - name: Upload ROS System Backup to FTP Server
+      community.routeros.command:
+        commands:
+          - /tool fetch address="{{ ftp_server }}" src-path="{{ inventory_hostname }}.backup" mode=ftp user="{{ ftp_user }}" password="{{ ftp_password }}" dst-path="{{ ftp_directory }}/{{ inventory_hostname }}-{{ time }}.backup" upload=yes
+      register: ftp_upload_system_result
+      when: system_backup_result.changed
+      ignore_errors: yes
+    - name: Check FTP Upload System Backup Success
+      set_fact:
+        ftp_upload_successful: false
+      when: "'failure: connection timeout' in ftp_upload_system_result.stdout[0]"
+
+    - name: Upload ROS Configuration Backup to FTP Server
+      community.routeros.command:
+        commands:
+          - /tool fetch address="{{ ftp_server }}" src-path="{{ inventory_hostname }}.rsc" mode=ftp user="{{ ftp_user }}" password="{{ ftp_password }}" dst-path="{{ ftp_directory }}/{{ inventory_hostname }}-{{ time }}.rsc" upload=yes
+      register: ftp_upload_config_result
+      when: config_backup_result.changed
+      ignore_errors: yes
+    - name: Check FTP Upload Config Backup Success
+      set_fact:
+        ftp_upload_successful: false
+      when: "'failure: connection timeout' in ftp_upload_config_result.stdout[0]"
+
+    # Conditionally execute Update RouterOS based on FTP upload success
+    - name: Update RouterOS
+      community.routeros.command:
+        commands: /system package update install
+      when: ftp_upload_successful
