@@ -20,7 +20,8 @@ Vault Variable File Path: Specify the path to your Ansible Vault file that conta
 - ftp_password: Password for FTP server authentication.
 - ftp_directory: The directory on the FTP server where backup files will be stored.
 - ftp_upload_successful: A boolean flag to track the success of FTP uploads. Initialized to true.
-## Tasks
+
+## Tasks
 - 1 Set Fact for Current Time: Captures the current time to append to backup filenames.
 - 2 Starting ROS System Backup: Executes a system backup on the RouterOS device.
 - 3 Starting ROS Configuration Backup: Exports the RouterOS configuration to a file.
